@@ -33,7 +33,7 @@ uvicorn app.main:app --reload
 - API: http://127.0.0.1:8000
 - Swagger UI (можно пробовать запросы в браузере): http://127.0.0.1:8000/docs
 
-### Запуск через Docker Compose (бонус)
+### Запуск через Docker Compose
 
 ```bash
 docker compose up --build
