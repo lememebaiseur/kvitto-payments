@@ -2,14 +2,15 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from app.models import Tariff
 
-# Начальные тарифы (цены строго в копейках: 1 рубль = 100 копеек)
+PROMO_CODE = "KVITTO10"
+PROMO_DISCOUNT_PERCENT = 10
+
 INITIAL_TARIFFS = [
     {"id": "basic", "title": "Basic", "price": 990000},       # 9 900 ₽
     {"id": "standard", "title": "Standard", "price": 1990000}, # 19 900 ₽
     {"id": "premium", "title": "Premium", "price": 2990000},   # 29 900 ₽
 ]
 
-# Карта разрешённых переходов статусов (State Machine)
 ALLOWED_STATUS_TRANSITIONS: dict[str, set[str]] = {
     "pending": {"succeeded", "failed"},
     "succeeded": {"refunded"},
@@ -34,9 +35,8 @@ def calculate_discount_and_amount(
     Считает скидку и итоговую сумму строго в целых копейках (без float).
     Возвращает кортеж: (discount, final_amount).
     """
-    if promo_code and promo_code.upper() == "KVITTO10":
-        # 10% через целочисленное деление, чтобы не появлялся float
-        discount = (price * 10) // 100
+    if promo_code and promo_code.upper() == PROMO_CODE:
+        discount = (price * PROMO_DISCOUNT_PERCENT) // 100
     else:
         discount = 0
 
@@ -54,15 +54,11 @@ def calculate_installment_schedule(
     if months is None:
         return None
 
-    # divmod возвращает (целая_часть, остаток_от_деления)
     base_payment, remainder = divmod(amount, months)
-
-    # Первые `remainder` месяцев получают +1 копейку, остальные — base_payment
-    schedule = [
+    return [
         base_payment + (1 if i < remainder else 0)
         for i in range(months)
     ]
-    return schedule
 
 
 def is_valid_status_transition(current_status: str, new_status: str) -> bool:

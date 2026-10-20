@@ -1,0 +1,13 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Локальная база данных SQLite
+*.db
+*.sqlite3
+
+# Настройки IDE
+.idea/
+.vscode/

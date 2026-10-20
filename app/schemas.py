@@ -1,8 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-# Допустимые значения по условиям предметной области
+from app.services import PROMO_CODE
+
 TariffId = Literal["basic", "standard", "premium"]
 PaymentMethod = Literal["card", "sbp", "installment"]
 InstallmentMonths = Literal[3, 6, 12]
@@ -15,8 +16,6 @@ class TariffResponse(BaseModel):
     title: str
     price: int
 
-    # В Pydantic v2 заменяет старый orm_mode = True,
-    # позволяя собирать схему напрямую из объекта SQLAlchemy
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -29,14 +28,11 @@ class PaymentCreate(BaseModel):
     promo_code: Optional[str] = None
 
     @field_validator("promo_code")
-    @classmethod
     def validate_promo_code(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return None
-        # Регистр не важен: приводим к верхнему регистру
         normalized = v.strip().upper()
-        if normalized != "KVITTO10":
-            # Выброс ValueError в Pydantic автоматически дает ответ 422 в FastAPI
+        if normalized != PROMO_CODE:
             raise ValueError("Неизвестный промокод")
         return normalized
 
@@ -65,6 +61,13 @@ class PaymentResponse(BaseModel):
     schedule: Optional[list[int]] = None
     email: str
     created_at: datetime
+
+    @field_validator("created_at")
+    def ensure_utc_timezone(cls, v: datetime) -> datetime:
+        # SQLite возвращает naive datetime без tzinfo, явно указываем UTC
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
 
     model_config = ConfigDict(from_attributes=True)
 

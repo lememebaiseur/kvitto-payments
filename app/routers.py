@@ -1,6 +1,7 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -9,6 +10,7 @@ from app.schemas import (
     BankWebhookRequest,
     PaymentCreate,
     PaymentResponse,
+    PaymentStatus,
     TariffResponse,
 )
 from app.services import (
@@ -41,7 +43,6 @@ def create_payment(
     Создаёт новый платёж (201).
     Если передан заголовок Idempotency-Key и платёж уже есть — возвращает его с кодом 200.
     """
-    # 1. Проверка идемпотентности
     if idempotency_key:
         existing_payment = (
             db.query(Payment)
@@ -52,14 +53,8 @@ def create_payment(
             response.status_code = status.HTTP_200_OK
             return existing_payment
 
-    # 2. Получаем тариф из БД
-    tariff = db.query(Tariff).filter(Tariff.id == payload.tariff_id).first()
-    if not tariff:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Tariff not found"
-        )
+    tariff = db.query(Tariff).filter(Tariff.id == payload.tariff_id).one()
 
-    # 3. Считаем скидку, итоговую сумму в копейках и график рассрочки
     discount, final_amount = calculate_discount_and_amount(
         price=tariff.price, promo_code=payload.promo_code
     )
@@ -67,7 +62,6 @@ def create_payment(
         amount=final_amount, months=payload.installment_months
     )
 
-    # 4. Сохраняем новый платёж со статусом pending
     new_payment = Payment(
         status="pending",
         tariff_id=tariff.id,
@@ -79,9 +73,21 @@ def create_payment(
         email=payload.email,
         idempotency_key=idempotency_key,
     )
-    db.add(new_payment)
-    db.commit()
-    db.refresh(new_payment)
+
+    try:
+        db.add(new_payment)
+        db.commit()
+        db.refresh(new_payment)
+    except IntegrityError:
+        # Защита от гонки (race condition) при параллельных запросах с одним Idempotency-Key
+        db.rollback()
+        existing_payment = (
+            db.query(Payment)
+            .filter(Payment.idempotency_key == idempotency_key)
+            .first()
+        )
+        response.status_code = status.HTTP_200_OK
+        return existing_payment
 
     return new_payment
 
@@ -108,7 +114,7 @@ def get_payment(payment_id: int, db: Session = Depends(get_db)):
 )
 def get_payments_list(
     email: Optional[str] = None,
-    status_filter: Optional[str] = None,
+    status_filter: Optional[PaymentStatus] = Query(default=None, alias="status"),
     db: Session = Depends(get_db),
 ):
     """Бонус: Получение списка платежей с фильтрацией по email и status."""
@@ -129,7 +135,6 @@ def bank_webhook(payload: BankWebhookRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found"
         )
 
-    # Проверяем, допустим ли переход статуса
     if not is_valid_status_transition(payment.status, payload.status):
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
