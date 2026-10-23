@@ -1,6 +1,6 @@
-# Kvitto Payments API
+#Payments API
 
-Небольшой сервис на FastAPI для приёма оплаты курсов онлайн-школы через Квитто:
+Небольшой сервис на FastAPI для приёма оплаты :
 три эндпоинта, уведомление от банка, расчёт в копейках без потерь, промокод,
 график рассрочки и идемпотентность создания платежей.
 
@@ -8,8 +8,7 @@
 
 - Python 3.11+
 - FastAPI + Pydantic v2
-- SQLAlchemy 2.0 + SQLite (файл `kvitto.db` создаётся автоматически при старте,
-  стартовые тарифы добавляются при запуске)
+- SQLAlchemy 2.0 + SQLite 
 - pytest + httpx
 
 ## Запуск
@@ -17,8 +16,8 @@
 Нужен Python 3.11 или новее.
 
 ```bash
-git clone https://github.com/lememebaiseur/kvitto-payments.git
-cd kvitto-payments
+git clone https://github.com/lememebaiseur/sync_payments.git
+cd sync_payments
 
 python -m venv .venv
 source .venv/bin/activate        # Linux / macOS
@@ -53,7 +52,7 @@ pytest
 
 - Все суммы в API и в базе — целые числа в копейках (`19 900 ₽` → `1990000`), без `float`.
 - Тарифы: `basic` — 990000, `standard` — 1990000, `premium` — 2990000.
-- Промокод `KVITTO10` даёт −10% от цены тарифа, регистр не важен. Неизвестный код — 422.
+- Промокод `10` даёт −10% от цены тарифа, регистр не важен. Неизвестный код — 422.
 - Способ оплаты: `card`, `sbp` или `installment`. Для `installment` обязателен
   `installment_months`: 3, 6 или 12. Для остальных способов это поле передавать нельзя (422).
 - График рассрочки: сумма к оплате делится на срок в копейках, лишние копейки идут
